@@ -9,71 +9,97 @@ static public class NetworkClientProcessing
     // Dictionary to track avatars of other clients
     static Dictionary<int, GameObject> clientAvatars = new Dictionary<int, GameObject>();
 
+    // Local client ID assigned by the server
+    static int localClientID = -1;
+
     public static void ReceivedMessageFromServer(string msg, TransportPipeline pipeline)
     {
-        Debug.Log($"Client: Received message from server: {msg}");
         string[] csv = msg.Split(',');
         int signifier = int.Parse(csv[0]);
 
-        if (signifier == ServerToClientSignifiers.SpawnAvatar)
+        switch (signifier)
         {
-            int clientID = int.Parse(csv[1]);
-            float xPercent = float.Parse(csv[2]);
-            float yPercent = float.Parse(csv[3]);
+            case ServerToClientSignifiers.AssignClientID:
+                int assignedID = int.Parse(csv[1]);
+                SetLocalClientID(assignedID);
+                break;
 
-            Debug.Log($"Client: Spawning avatar for Client {clientID} at ({xPercent}, {yPercent})");
+            case ServerToClientSignifiers.SpawnAvatar:
+                HandleSpawnAvatarMessage(csv);
+                break;
 
-            if (!clientAvatars.ContainsKey(clientID))
-            {
-                GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent));
-                clientAvatars[clientID] = avatar;
-            }
-        }
-        else if (signifier == ServerToClientSignifiers.UpdatePosition)
-        {
-            int clientID = int.Parse(csv[1]);
-            float xPercent = float.Parse(csv[2]);
-            float yPercent = float.Parse(csv[3]);
+            case ServerToClientSignifiers.UpdatePosition:
+                HandleUpdatePositionMessage(csv);
+                break;
 
-            Debug.Log($"Received position update for Client {clientID}: ({xPercent}, {yPercent})"); // Log received position
-
-            if (clientAvatars.ContainsKey(clientID))
-            {
-                gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
-            }
-            else
-            {
-                Debug.LogWarning($"No avatar found for Client {clientID} to update position.");
-            }
-        }
-
-        else if (signifier == ServerToClientSignifiers.RemoveAvatar)
-        {
-            int clientID = int.Parse(csv[1]);
-            Debug.Log($"Client: Removing avatar for Client {clientID}");
-
-            if (clientAvatars.ContainsKey(clientID))
-            {
-                GameObject avatar = clientAvatars[clientID];
-                GameObject.Destroy(avatar);
-                clientAvatars.Remove(clientID);
-            }
+            case ServerToClientSignifiers.RemoveAvatar:
+                HandleRemoveAvatarMessage(csv);
+                break;
         }
     }
 
+    private static void HandleSpawnAvatarMessage(string[] csv)
+    {
+        int clientID = int.Parse(csv[1]);
+        float xPercent = float.Parse(csv[2]);
+        float yPercent = float.Parse(csv[3]);
+
+        if (clientID == localClientID) return; // Skip spawning local client avatar
+
+        if (!clientAvatars.ContainsKey(clientID))
+        {
+            GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent));
+            clientAvatars[clientID] = avatar;
+        }
+    }
+
+    private static void HandleUpdatePositionMessage(string[] csv)
+    {
+        int clientID = int.Parse(csv[1]);
+        float xPercent = float.Parse(csv[2]);
+        float yPercent = float.Parse(csv[3]);
+
+        if (clientAvatars.ContainsKey(clientID))
+        {
+            gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
+        }
+    }
+
+    private static void HandleRemoveAvatarMessage(string[] csv)
+    {
+        int clientID = int.Parse(csv[1]);
+
+        if (clientAvatars.ContainsKey(clientID))
+        {
+            GameObject avatar = clientAvatars[clientID];
+            GameObject.Destroy(avatar);
+            clientAvatars.Remove(clientID);
+        }
+    }
 
     public static void SendMessageToServer(string msg, TransportPipeline pipeline)
     {
         networkClient.SendMessageToServer(msg, pipeline);
     }
 
-    public static void SetNetworkedClient(NetworkClient client) => networkClient = client;
-    public static void SetGameLogic(GameLogic logic) => gameLogic = logic;
+    public static void SetNetworkedClient(NetworkClient client)
+    {
+        networkClient = client;
+    }
 
-    // Added missing method to resolve the red error
     public static NetworkClient GetNetworkedClient()
     {
         return networkClient;
+    }
+
+    public static void SetGameLogic(GameLogic logic)
+    {
+        gameLogic = logic;
+    }
+
+    private static void SetLocalClientID(int id)
+    {
+        localClientID = id;
     }
 }
 
@@ -85,8 +111,9 @@ static public class ClientToServerSignifiers
 
 static public class ServerToClientSignifiers
 {
-    public const int SpawnAvatar = 1; // Sent to spawn an avatar
+    public const int AssignClientID = 0; // Sent to assign the client's ID
+    public const int SpawnAvatar = 1;    // Sent to spawn an avatar
     public const int UpdatePosition = 2; // Sent to update a client's position
-    public const int RemoveAvatar = 3; // Sent to remove a disconnected client's avatar
+    public const int RemoveAvatar = 3;   // Sent to remove a disconnected client's avatar
 }
 #endregion
