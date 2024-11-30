@@ -27,7 +27,6 @@ public class GameLogic : MonoBehaviour
 
     void Update()
     {
-        // Capture movement input and calculate velocity
         if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.D)
             || Input.GetKeyUp(KeyCode.W) || Input.GetKeyUp(KeyCode.A) || Input.GetKeyUp(KeyCode.S) || Input.GetKeyUp(KeyCode.D))
         {
@@ -62,11 +61,15 @@ public class GameLogic : MonoBehaviour
             else if (Input.GetKey(KeyCode.S))
                 characterVelocityInPercent.y = -CharacterSpeed;
 
-            // Send movement update to the server
+            Debug.Log($"Client: Calculated Velocity: {characterVelocityInPercent}");
+
             string msg = $"{ClientToServerSignifiers.UpdatePosition},{characterVelocityInPercent.x},{characterVelocityInPercent.y}";
+            Debug.Log($"Client: Sending message to server: {msg}");
             NetworkClientProcessing.SendMessageToServer(msg, TransportPipeline.ReliableAndInOrder);
         }
     }
+
+
 
     public GameObject SpawnAvatar(Vector2 positionInPercent)
     {
@@ -81,6 +84,7 @@ public class GameLogic : MonoBehaviour
 
     public void UpdateAvatarPosition(GameObject avatar, Vector2 positionInPercent)
     {
+        Debug.Log($"Client: Updating position of avatar {avatar.name} to {positionInPercent}");
         Vector2 screenPos = new Vector2(positionInPercent.x * Screen.width, positionInPercent.y * Screen.height);
         Vector3 worldPos = Camera.main.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 0));
         worldPos.z = 0;

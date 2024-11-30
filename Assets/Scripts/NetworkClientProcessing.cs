@@ -11,6 +11,7 @@ static public class NetworkClientProcessing
 
     public static void ReceivedMessageFromServer(string msg, TransportPipeline pipeline)
     {
+        Debug.Log($"Client: Received message from server: {msg}");
         string[] csv = msg.Split(',');
         int signifier = int.Parse(csv[0]);
 
@@ -20,26 +21,12 @@ static public class NetworkClientProcessing
             float xPercent = float.Parse(csv[2]);
             float yPercent = float.Parse(csv[3]);
 
-            Debug.Log($"Client: Spawning avatar for client ID {clientID} at ({xPercent}, {yPercent})");
+            Debug.Log($"Client: Spawning avatar for Client {clientID} at ({xPercent}, {yPercent})");
 
-            // Spawn an avatar for the specified client ID
             if (!clientAvatars.ContainsKey(clientID))
             {
                 GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent));
                 clientAvatars[clientID] = avatar;
-            }
-        }
-        else if (signifier == ServerToClientSignifiers.RemoveAvatar)
-        {
-            int clientID = int.Parse(csv[1]);
-            Debug.Log($"Client: Removing avatar for client ID {clientID}");
-
-            // Remove the avatar for the specified client ID
-            if (clientAvatars.ContainsKey(clientID))
-            {
-                GameObject avatar = clientAvatars[clientID];
-                GameObject.Destroy(avatar);
-                clientAvatars.Remove(clientID);
             }
         }
         else if (signifier == ServerToClientSignifiers.UpdatePosition)
@@ -50,10 +37,24 @@ static public class NetworkClientProcessing
 
             if (clientAvatars.ContainsKey(clientID))
             {
+                Debug.Log($"Client: Updating position for avatar of Client {clientID} to ({xPercent}, {yPercent})");
                 gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
             }
         }
+        else if (signifier == ServerToClientSignifiers.RemoveAvatar)
+        {
+            int clientID = int.Parse(csv[1]);
+            Debug.Log($"Client: Removing avatar for Client {clientID}");
+
+            if (clientAvatars.ContainsKey(clientID))
+            {
+                GameObject avatar = clientAvatars[clientID];
+                GameObject.Destroy(avatar);
+                clientAvatars.Remove(clientID);
+            }
+        }
     }
+
 
     public static void SendMessageToServer(string msg, TransportPipeline pipeline)
     {
