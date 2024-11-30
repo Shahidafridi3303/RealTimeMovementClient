@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class GameLogic : MonoBehaviour
@@ -70,15 +68,22 @@ public class GameLogic : MonoBehaviour
         }
     }
 
-    public void UpdateCharacterPosition(Vector2 newPositionInPercent)
+    public GameObject SpawnAvatar(Vector2 positionInPercent)
     {
-        // Update the character's position based on the server's message
-        characterPositionInPercent = newPositionInPercent;
+        GameObject avatar = new GameObject("Avatar");
+        SpriteRenderer renderer = avatar.AddComponent<SpriteRenderer>();
+        renderer.sprite = Resources.Load<Sprite>("Circle");
 
-        // Convert percentage position to world position
-        Vector2 screenPos = new Vector2(characterPositionInPercent.x * Screen.width, characterPositionInPercent.y * Screen.height);
+        UpdateAvatarPosition(avatar, positionInPercent);
+
+        return avatar;
+    }
+
+    public void UpdateAvatarPosition(GameObject avatar, Vector2 positionInPercent)
+    {
+        Vector2 screenPos = new Vector2(positionInPercent.x * Screen.width, positionInPercent.y * Screen.height);
         Vector3 worldPos = Camera.main.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 0));
         worldPos.z = 0;
-        character.transform.position = worldPos;
+        avatar.transform.position = worldPos;
     }
 }

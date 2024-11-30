@@ -23,14 +23,15 @@ public class NetworkClient : MonoBehaviour
         }
         else
         {
-            Debug.Log("Singleton-ish architecture violation detected, investigate where NetworkClient.cs Start() is being called.  Are you creating a second instance of the NetworkClient game object or has NetworkClient.cs been attached to more than one game object?");
+            Debug.Log("Singleton-ish architecture violation detected, investigate where NetworkClient.cs Start() is being called.");
             Destroy(this.gameObject);
         }
     }
 
     public void OnDestroy()
     {
-        networkConnection.Disconnect(networkDriver);
+        if (networkConnection.IsCreated)
+            networkConnection.Disconnect(networkDriver);
         networkConnection = default(NetworkConnection);
         networkDriver.Dispose();
     }
@@ -39,17 +40,11 @@ public class NetworkClient : MonoBehaviour
     {
         networkDriver.ScheduleUpdate().Complete();
 
-        #region Check for client to server connection
-
         if (!networkConnection.IsCreated)
         {
             Debug.Log("Client is unable to connect to server");
             return;
         }
-
-        #endregion
-
-        #region Manage Network Events
 
         NetworkEvent.Type networkEventType;
         DataStreamReader streamReader;
@@ -66,34 +61,28 @@ public class NetworkClient : MonoBehaviour
             switch (networkEventType)
             {
                 case NetworkEvent.Type.Connect:
-                    NetworkClientProcessing.ConnectionEvent();
+                    Debug.Log("Client connected to server.");
                     break;
                 case NetworkEvent.Type.Data:
                     int sizeOfDataBuffer = streamReader.ReadInt();
                     NativeArray<byte> buffer = new NativeArray<byte>(sizeOfDataBuffer, Allocator.Persistent);
                     streamReader.ReadBytes(buffer);
-                    byte[] byteBuffer = buffer.ToArray();
-                    string msg = Encoding.Unicode.GetString(byteBuffer);
+                    string msg = Encoding.Unicode.GetString(buffer.ToArray());
                     NetworkClientProcessing.ReceivedMessageFromServer(msg, pipelineUsed);
                     buffer.Dispose();
                     break;
                 case NetworkEvent.Type.Disconnect:
-                    NetworkClientProcessing.DisconnectionEvent();
+                    Debug.Log("Client disconnected from server.");
                     networkConnection = default(NetworkConnection);
                     break;
             }
         }
-
-        #endregion
     }
 
     private bool PopNetworkEventAndCheckForData(out NetworkEvent.Type networkEventType, out DataStreamReader streamReader, out NetworkPipeline pipelineUsedToSendEvent)
     {
         networkEventType = networkConnection.PopEvent(networkDriver, out streamReader, out pipelineUsedToSendEvent);
-
-        if (networkEventType == NetworkEvent.Type.Empty)
-            return false;
-        return true;
+        return networkEventType != NetworkEvent.Type.Empty;
     }
 
     public void SendMessageToServer(string msg, TransportPipeline pipeline)
