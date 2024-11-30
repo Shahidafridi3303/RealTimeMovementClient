@@ -47,20 +47,27 @@ public class GameLogic : MonoBehaviour
         NetworkClientProcessing.SendMessageToServer($"{ClientToServerSignifiers.UpdatePosition},{characterVelocityInPercent.x},{characterVelocityInPercent.y}", TransportPipeline.ReliableAndInOrder);
     }
 
-    public GameObject SpawnAvatar(Vector2 positionInPercent)
+    public GameObject SpawnAvatar(Vector2 positionInPercent, Color avatarColor)
     {
         GameObject avatar = new GameObject("Avatar");
-        var renderer = avatar.AddComponent<SpriteRenderer>();
+        SpriteRenderer renderer = avatar.AddComponent<SpriteRenderer>();
         renderer.sprite = Resources.Load<Sprite>("Circle");
 
+        // Assign the color
+        renderer.color = avatarColor;
+
+        // Update the position
         UpdateAvatarPosition(avatar, positionInPercent);
 
         return avatar;
     }
 
+
+
     public void UpdateAvatarPosition(GameObject avatar, Vector2 positionInPercent)
     {
-        avatar.transform.position = Vector3.Lerp(avatar.transform.position, ConvertToWorldPosition(positionInPercent), SmoothMovementSpeed * Time.deltaTime);
+        Vector3 worldPos = ConvertToWorldPosition(positionInPercent);
+        avatar.transform.position = Vector3.Lerp(avatar.transform.position, worldPos, Time.deltaTime * 10f);
     }
 
     private Vector3 ConvertToWorldPosition(Vector2 percentPosition)
@@ -70,4 +77,5 @@ public class GameLogic : MonoBehaviour
         worldPos.z = 0;
         return worldPos;
     }
+
 }

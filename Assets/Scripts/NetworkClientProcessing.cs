@@ -17,41 +17,78 @@ static public class NetworkClientProcessing
         string[] csv = msg.Split(',');
         int signifier = int.Parse(csv[0]);
 
-        switch (signifier)
+        if (signifier == ServerToClientSignifiers.AssignClientID)
         {
-            case ServerToClientSignifiers.AssignClientID:
-                int assignedID = int.Parse(csv[1]);
-                SetLocalClientID(assignedID);
-                break;
+            int assignedID = int.Parse(csv[1]);
+            SetLocalClientID(assignedID);
+        }
+        else if (signifier == ServerToClientSignifiers.SpawnAvatar)
+        {
+            HandleSpawnAvatarMessage(csv);
+        }
+        else if (signifier == ServerToClientSignifiers.UpdatePosition)
+        {
+            int clientID = int.Parse(csv[1]);
+            float xPercent = float.Parse(csv[2]);
+            float yPercent = float.Parse(csv[3]);
 
-            case ServerToClientSignifiers.SpawnAvatar:
-                HandleSpawnAvatarMessage(csv);
-                break;
+            if (clientAvatars.ContainsKey(clientID))
+            {
+                gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
+            }
+        }
+        else if (signifier == ServerToClientSignifiers.RemoveAvatar)
+        {
+            int clientID = int.Parse(csv[1]);
 
-            case ServerToClientSignifiers.UpdatePosition:
-                HandleUpdatePositionMessage(csv);
-                break;
-
-            case ServerToClientSignifiers.RemoveAvatar:
-                HandleRemoveAvatarMessage(csv);
-                break;
+            if (clientAvatars.ContainsKey(clientID))
+            {
+                GameObject avatar = clientAvatars[clientID];
+                GameObject.Destroy(avatar);
+                clientAvatars.Remove(clientID);
+            }
         }
     }
+
 
     private static void HandleSpawnAvatarMessage(string[] csv)
     {
+        // Parse data from the message
         int clientID = int.Parse(csv[1]);
         float xPercent = float.Parse(csv[2]);
         float yPercent = float.Parse(csv[3]);
+        float r = float.Parse(csv[4]);
+        float g = float.Parse(csv[5]);
+        float b = float.Parse(csv[6]);
 
-        if (clientID == localClientID) return; // Skip spawning local client avatar
+        // Convert color values
+        Color avatarColor = new Color(r, g, b);
 
+        // Skip spawning for the local client ID
+        if (clientID == localClientID)
+        {
+            Debug.Log($"Skipping spawning avatar for local client ID: {clientID}");
+            return;
+        }
+
+        // Check if the avatar for this client ID already exists
         if (!clientAvatars.ContainsKey(clientID))
         {
-            GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent));
+            // Spawn the avatar and assign it a color
+            GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent), avatarColor);
+
+            // Add the newly spawned avatar to the dictionary
             clientAvatars[clientID] = avatar;
+
+            Debug.Log($"Spawned avatar for Client {clientID} at ({xPercent}, {yPercent}) with color {avatarColor}");
+        }
+        else
+        {
+            Debug.LogWarning($"Avatar for Client {clientID} already exists. Ignoring spawn request.");
         }
     }
+
+
 
     private static void HandleUpdatePositionMessage(string[] csv)
     {

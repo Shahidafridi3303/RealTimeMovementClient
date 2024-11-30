@@ -87,6 +87,12 @@ public class NetworkClient : MonoBehaviour
 
     public void SendMessageToServer(string msg, TransportPipeline pipeline)
     {
+        if (!networkConnection.IsCreated)
+        {
+            Debug.LogError("Connection is not created. Unable to send message.");
+            return;
+        }
+
         NetworkPipeline networkPipeline = reliableAndInOrderPipeline;
         if (pipeline == TransportPipeline.FireAndForget)
             networkPipeline = nonReliableNotInOrderedPipeline;
@@ -102,6 +108,8 @@ public class NetworkClient : MonoBehaviour
 
         buffer.Dispose();
     }
+
+
 
     public void Connect()
     {
