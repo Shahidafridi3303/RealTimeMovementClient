@@ -134,7 +134,6 @@ public class NetworkClient : MonoBehaviour
                 streamWriter.WriteInt(buffer.Length);
                 streamWriter.WriteBytes(buffer);
                 networkDriver.EndSend(streamWriter);
-                Debug.Log($"Message sent to server: {msg}");
             }
             else
             {

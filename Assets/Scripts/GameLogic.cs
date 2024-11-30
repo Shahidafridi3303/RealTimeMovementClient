@@ -2,34 +2,22 @@ using UnityEngine;
 
 public class GameLogic : MonoBehaviour
 {
-    GameObject character;
-    Vector2 characterPositionInPercent = new Vector2(0.5f, 0.5f); // Initial position
-    Vector2 characterVelocityInPercent;
     const float CharacterSpeed = 0.06f;
-    const float SmoothMovementSpeed = 10f;
-    float DiagonalCharacterSpeed;
 
+    // Initialize only the necessary components
     void Start()
     {
-        DiagonalCharacterSpeed = Mathf.Sqrt(CharacterSpeed * CharacterSpeed + CharacterSpeed * CharacterSpeed) / 2f;
         NetworkClientProcessing.SetGameLogic(this);
-
-        // Create character GameObject
-        character = new GameObject("Character");
-        var renderer = character.AddComponent<SpriteRenderer>();
-        renderer.sprite = Resources.Load<Sprite>("Circle");
     }
 
     void Update()
     {
         HandleLocalMovement();
-
-        character.transform.position = ConvertToWorldPosition(characterPositionInPercent);
     }
 
     private void HandleLocalMovement()
     {
-        characterVelocityInPercent = Vector2.zero;
+        Vector2 characterVelocityInPercent = Vector2.zero;
 
         if (Input.GetKey(KeyCode.W)) characterVelocityInPercent.y += CharacterSpeed;
         if (Input.GetKey(KeyCode.S)) characterVelocityInPercent.y -= CharacterSpeed;
@@ -41,10 +29,11 @@ public class GameLogic : MonoBehaviour
             characterVelocityInPercent.Normalize();
         }
 
-        characterPositionInPercent += characterVelocityInPercent * Time.deltaTime;
-
-        // Send updates to the server
-        NetworkClientProcessing.SendMessageToServer($"{ClientToServerSignifiers.UpdatePosition},{characterVelocityInPercent.x},{characterVelocityInPercent.y}", TransportPipeline.ReliableAndInOrder);
+        // Send movement updates to the server
+        NetworkClientProcessing.SendMessageToServer(
+            $"{ClientToServerSignifiers.UpdatePosition},{characterVelocityInPercent.x},{characterVelocityInPercent.y}",
+            TransportPipeline.ReliableAndInOrder
+        );
     }
 
     public GameObject SpawnAvatar(Vector2 positionInPercent, Color avatarColor)
@@ -62,12 +51,10 @@ public class GameLogic : MonoBehaviour
         return avatar;
     }
 
-
-
     public void UpdateAvatarPosition(GameObject avatar, Vector2 positionInPercent)
     {
         Vector3 worldPos = ConvertToWorldPosition(positionInPercent);
-        avatar.transform.position = Vector3.Lerp(avatar.transform.position, worldPos, Time.deltaTime * 10f);
+        avatar.transform.position = worldPos;
     }
 
     private Vector3 ConvertToWorldPosition(Vector2 percentPosition)
@@ -77,5 +64,4 @@ public class GameLogic : MonoBehaviour
         worldPos.z = 0;
         return worldPos;
     }
-
 }
