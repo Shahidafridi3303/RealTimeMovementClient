@@ -12,70 +12,50 @@ static public class NetworkClientProcessing
     // Local client ID assigned by the server
     static int localClientID = -1;
 
+    #region Message Handling
+
     public static void ReceivedMessageFromServer(string msg, TransportPipeline pipeline)
     {
         string[] csv = msg.Split(',');
         int signifier = int.Parse(csv[0]);
 
-        if (signifier == ServerToClientSignifiers.AssignClientID)
+        switch (signifier)
         {
-            int assignedID = int.Parse(csv[1]);
-            SetLocalClientID(assignedID);
-        }
-        else if (signifier == ServerToClientSignifiers.SpawnAvatar)
-        {
-            HandleSpawnAvatarMessage(csv);
-        }
-        else if (signifier == ServerToClientSignifiers.UpdatePosition)
-        {
-            int clientID = int.Parse(csv[1]);
-            float xPercent = float.Parse(csv[2]);
-            float yPercent = float.Parse(csv[3]);
+            case ServerToClientSignifiers.AssignClientID:
+                int assignedID = int.Parse(csv[1]);
+                SetLocalClientID(assignedID);
+                break;
 
-            if (clientAvatars.ContainsKey(clientID))
-            {
-                gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
-            }
-        }
-        else if (signifier == ServerToClientSignifiers.RemoveAvatar)
-        {
-            int clientID = int.Parse(csv[1]);
+            case ServerToClientSignifiers.SpawnAvatar:
+                HandleSpawnAvatarMessage(csv);
+                break;
 
-            if (clientAvatars.ContainsKey(clientID))
-            {
-                GameObject avatar = clientAvatars[clientID];
-                GameObject.Destroy(avatar);
-                clientAvatars.Remove(clientID);
-            }
+            case ServerToClientSignifiers.UpdatePosition:
+                HandleUpdatePositionMessage(csv);
+                break;
+
+            case ServerToClientSignifiers.RemoveAvatar:
+                HandleRemoveAvatarMessage(csv);
+                break;
         }
     }
 
+    // Handle the avatar spawning
     private static void HandleSpawnAvatarMessage(string[] csv)
     {
         int clientID = int.Parse(csv[1]);
         float xPercent = float.Parse(csv[2]);
         float yPercent = float.Parse(csv[3]);
-        float r = float.Parse(csv[4]);
-        float g = float.Parse(csv[5]);
-        float b = float.Parse(csv[6]);
+        Color avatarColor = new Color(float.Parse(csv[4]), float.Parse(csv[5]), float.Parse(csv[6]));
 
-        Color avatarColor = new Color(r, g, b);
-
-        if (clientID == localClientID) return; // Skip spawning for local client
-
-        if (clientAvatars.ContainsKey(clientID))
-        {
-            Debug.LogWarning($"Avatar for Client {clientID} already exists. Ignoring spawn request.");
-            return;
-        }
+        if (clientID == localClientID || clientAvatars.ContainsKey(clientID)) return;
 
         GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent), avatarColor);
         clientAvatars[clientID] = avatar;
-
         Debug.Log($"Spawned avatar for Client {clientID} at ({xPercent}, {yPercent}) with color {avatarColor}");
     }
 
-
+    // Update the position of the avatar
     private static void HandleUpdatePositionMessage(string[] csv)
     {
         int clientID = int.Parse(csv[1]);
@@ -88,6 +68,7 @@ static public class NetworkClientProcessing
         }
     }
 
+    // Remove the avatar when a client disconnects
     private static void HandleRemoveAvatarMessage(string[] csv)
     {
         int clientID = int.Parse(csv[1]);
@@ -100,30 +81,45 @@ static public class NetworkClientProcessing
         }
     }
 
+    #endregion
+
+    #region Sending Messages
+
+    // Send a message to the server
     public static void SendMessageToServer(string msg, TransportPipeline pipeline)
     {
         networkClient.SendMessageToServer(msg, pipeline);
     }
 
+    #endregion
+
+    #region Setup Methods
+
+    // Set the network client
     public static void SetNetworkedClient(NetworkClient client)
     {
         networkClient = client;
     }
 
+    // Get the network client
     public static NetworkClient GetNetworkedClient()
     {
         return networkClient;
     }
 
+    // Set the game logic
     public static void SetGameLogic(GameLogic logic)
     {
         gameLogic = logic;
     }
 
+    // Set the local client ID
     private static void SetLocalClientID(int id)
     {
         localClientID = id;
     }
+
+    #endregion
 }
 
 #region Protocol Signifiers

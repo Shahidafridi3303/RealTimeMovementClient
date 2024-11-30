@@ -1,9 +1,7 @@
 using UnityEngine;
-using UnityEngine.Assertions;
-using Unity.Collections;
 using Unity.Networking.Transport;
 using System.Text;
-using System;
+using Unity.Collections;
 
 public class NetworkClient : MonoBehaviour
 {
@@ -14,8 +12,7 @@ public class NetworkClient : MonoBehaviour
     const ushort NetworkPort = 9001;
     const string IPAddress = "192.168.4.102";
 
-    private bool connectionEstablished = false;
-    private bool isConnected = false; // Add this at the top of the class
+    private bool isConnected = false;
 
     void Start()
     {
@@ -27,7 +24,7 @@ public class NetworkClient : MonoBehaviour
         }
         else
         {
-            Debug.Log("Singleton-ish architecture violation detected, investigate where NetworkClient.cs Start() is being called.");
+            Debug.LogWarning("Multiple NetworkClient instances detected! Destroying duplicate.");
             Destroy(this.gameObject);
         }
     }
@@ -45,15 +42,7 @@ public class NetworkClient : MonoBehaviour
     {
         networkDriver.ScheduleUpdate().Complete();
 
-        if (!networkConnection.IsCreated)
-        {
-            if (isConnected)
-            {
-                Debug.LogError("Lost connection to server.");
-                isConnected = false;
-            }
-            return;
-        }
+        if (!networkConnection.IsCreated) return;
 
         NetworkEvent.Type networkEventType;
         DataStreamReader streamReader;
@@ -61,37 +50,35 @@ public class NetworkClient : MonoBehaviour
 
         while (PopNetworkEventAndCheckForData(out networkEventType, out streamReader, out pipelineUsedToSendEvent))
         {
-            TransportPipeline pipelineUsed = TransportPipeline.NotIdentified;
-            if (pipelineUsedToSendEvent == reliableAndInOrderPipeline)
-                pipelineUsed = TransportPipeline.ReliableAndInOrder;
-            else if (pipelineUsedToSendEvent == nonReliableNotInOrderedPipeline)
-                pipelineUsed = TransportPipeline.FireAndForget;
-
-            switch (networkEventType)
-            {
-                case NetworkEvent.Type.Connect:
-                    Debug.Log("Client connected to server.");
-                    isConnected = true; // Mark connection as established
-                    break;
-
-                case NetworkEvent.Type.Data:
-                    int sizeOfDataBuffer = streamReader.ReadInt();
-                    NativeArray<byte> buffer = new NativeArray<byte>(sizeOfDataBuffer, Allocator.Persistent);
-                    streamReader.ReadBytes(buffer);
-                    string msg = Encoding.Unicode.GetString(buffer.ToArray());
-                    NetworkClientProcessing.ReceivedMessageFromServer(msg, pipelineUsed);
-                    buffer.Dispose();
-                    break;
-
-                case NetworkEvent.Type.Disconnect:
-                    Debug.LogError("Disconnected from server.");
-                    isConnected = false; // Mark connection as lost
-                    networkConnection = default(NetworkConnection);
-                    break;
-            }
+            ProcessNetworkEvent(networkEventType, streamReader);
         }
     }
 
+    private void ProcessNetworkEvent(NetworkEvent.Type eventType, DataStreamReader streamReader)
+    {
+        switch (eventType)
+        {
+            case NetworkEvent.Type.Connect:
+                Debug.Log("Connected to server.");
+                isConnected = true;
+                break;
+
+            case NetworkEvent.Type.Data:
+                int sizeOfDataBuffer = streamReader.ReadInt();
+                NativeArray<byte> buffer = new NativeArray<byte>(sizeOfDataBuffer, Allocator.Persistent);
+                streamReader.ReadBytes(buffer);
+                string msg = Encoding.Unicode.GetString(buffer.ToArray());
+                NetworkClientProcessing.ReceivedMessageFromServer(msg, TransportPipeline.ReliableAndInOrder);
+                buffer.Dispose();
+                break;
+
+            case NetworkEvent.Type.Disconnect:
+                Debug.Log("Disconnected from server.");
+                isConnected = false;
+                networkConnection = default(NetworkConnection);
+                break;
+        }
+    }
 
     private bool PopNetworkEventAndCheckForData(out NetworkEvent.Type networkEventType, out DataStreamReader streamReader, out NetworkPipeline pipelineUsedToSendEvent)
     {
@@ -101,53 +88,22 @@ public class NetworkClient : MonoBehaviour
 
     public void SendMessageToServer(string msg, TransportPipeline pipeline)
     {
-        if (!isConnected)
+        if (!isConnected || !networkDriver.IsCreated || !networkConnection.IsCreated)
         {
-            Debug.LogError("Failed to send message to server: Not connected.");
+            Debug.LogError("Failed to send message to server.");
             return;
         }
 
-        if (!networkDriver.IsCreated)
-        {
-            Debug.LogError("Failed to send message to server: Network driver is not created.");
-            return;
-        }
+        NativeArray<byte> buffer = new NativeArray<byte>(Encoding.Unicode.GetBytes(msg), Allocator.Temp);
+        DataStreamWriter streamWriter;
 
-        if (!networkConnection.IsCreated)
-        {
-            Debug.LogError("Failed to send message to server: Network connection is not created.");
-            return;
-        }
+        networkDriver.BeginSend(reliableAndInOrderPipeline, networkConnection, out streamWriter);
+        streamWriter.WriteInt(buffer.Length);
+        streamWriter.WriteBytes(buffer);
+        networkDriver.EndSend(streamWriter);
 
-        try
-        {
-            NetworkPipeline networkPipeline = reliableAndInOrderPipeline;
-            if (pipeline == TransportPipeline.FireAndForget)
-                networkPipeline = nonReliableNotInOrderedPipeline;
-
-            byte[] msgAsByteArray = Encoding.Unicode.GetBytes(msg);
-            NativeArray<byte> buffer = new NativeArray<byte>(msgAsByteArray, Allocator.Temp);
-
-            DataStreamWriter streamWriter;
-            if (networkDriver.BeginSend(networkPipeline, networkConnection, out streamWriter) == 0)
-            {
-                streamWriter.WriteInt(buffer.Length);
-                streamWriter.WriteBytes(buffer);
-                networkDriver.EndSend(streamWriter);
-            }
-            else
-            {
-                Debug.LogError("Failed to send message to server: Unable to start send operation.");
-            }
-
-            buffer.Dispose();
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"Failed to send message to server: {ex.Message}");
-        }
+        buffer.Dispose();
     }
-
 
     public void Connect()
     {
@@ -155,7 +111,7 @@ public class NetworkClient : MonoBehaviour
         {
             if (networkDriver.IsCreated)
             {
-                Debug.LogWarning("Network driver already created. Skipping initialization.");
+                Debug.LogWarning("Network driver already created.");
                 return;
             }
 
@@ -168,34 +124,26 @@ public class NetworkClient : MonoBehaviour
             NetworkEndPoint endpoint = NetworkEndPoint.Parse(IPAddress, NetworkPort, NetworkFamily.Ipv4);
             networkConnection = networkDriver.Connect(endpoint);
 
-            if (networkConnection.IsCreated)
-            {
-                Debug.Log("Client is attempting to connect to the server...");
-            }
-            else
+            if (!networkConnection.IsCreated)
             {
                 Debug.LogError("Failed to initialize network connection.");
             }
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"Error during Connect: {ex.Message}");
+            Debug.LogError($"Connection Error: {ex.Message}");
         }
     }
 
-
-    public bool IsConnected()
-    {
-        return networkConnection.IsCreated;
-    }
+    public bool IsConnected() => networkConnection.IsCreated;
 
     public void Disconnect()
     {
         networkConnection.Disconnect(networkDriver);
         networkConnection = default(NetworkConnection);
     }
-
 }
+
 
 public enum TransportPipeline
 {
