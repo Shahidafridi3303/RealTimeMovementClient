@@ -62,12 +62,13 @@ public class GameLogic : MonoBehaviour
         return avatar;
     }
 
-
-
-    public void UpdateAvatarPosition(GameObject avatar, Vector2 positionInPercent)
+    public void UpdateAvatarPosition(GameObject avatar, Vector2 newPosition)
     {
-        Vector3 worldPos = ConvertToWorldPosition(positionInPercent);
-        avatar.transform.position = Vector3.Lerp(avatar.transform.position, worldPos, Time.deltaTime * 10f);
+        Vector3 targetPosition = ConvertToWorldPosition(newPosition);
+        if (avatar != null)
+        {
+            avatar.transform.position = Vector3.Lerp(avatar.transform.position, targetPosition, Time.deltaTime * 10);
+        }
     }
 
     private Vector3 ConvertToWorldPosition(Vector2 percentPosition)
