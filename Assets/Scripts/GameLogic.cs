@@ -82,12 +82,18 @@ public class GameLogic : MonoBehaviour
         return avatar;
     }
 
+    // Client's GameLogic
     public void UpdateAvatarPosition(GameObject avatar, Vector2 positionInPercent)
     {
-        Debug.Log($"Client: Updating position of avatar {avatar.name} to {positionInPercent}");
         Vector2 screenPos = new Vector2(positionInPercent.x * Screen.width, positionInPercent.y * Screen.height);
         Vector3 worldPos = Camera.main.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 0));
         worldPos.z = 0;
+
+        Debug.Log($"Converting percent position ({positionInPercent.x}, {positionInPercent.y}) to world position ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+
         avatar.transform.position = worldPos;
+        Debug.Log($"Updated avatar position to: {avatar.transform.position}");
     }
+
+
 }

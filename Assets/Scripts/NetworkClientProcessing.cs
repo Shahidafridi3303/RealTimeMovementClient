@@ -35,12 +35,18 @@ static public class NetworkClientProcessing
             float xPercent = float.Parse(csv[2]);
             float yPercent = float.Parse(csv[3]);
 
+            Debug.Log($"Received position update for Client {clientID}: ({xPercent}, {yPercent})"); // Log received position
+
             if (clientAvatars.ContainsKey(clientID))
             {
-                Debug.Log($"Client: Updating position for avatar of Client {clientID} to ({xPercent}, {yPercent})");
                 gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
             }
+            else
+            {
+                Debug.LogWarning($"No avatar found for Client {clientID} to update position.");
+            }
         }
+
         else if (signifier == ServerToClientSignifiers.RemoveAvatar)
         {
             int clientID = int.Parse(csv[1]);
