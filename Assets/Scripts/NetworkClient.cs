@@ -3,6 +3,7 @@ using UnityEngine.Assertions;
 using Unity.Collections;
 using Unity.Networking.Transport;
 using System.Text;
+using System;
 
 public class NetworkClient : MonoBehaviour
 {
@@ -12,6 +13,9 @@ public class NetworkClient : MonoBehaviour
     NetworkPipeline nonReliableNotInOrderedPipeline;
     const ushort NetworkPort = 9001;
     const string IPAddress = "192.168.4.102";
+
+    private bool connectionEstablished = false;
+    private bool isConnected = false; // Add this at the top of the class
 
     void Start()
     {
@@ -32,8 +36,9 @@ public class NetworkClient : MonoBehaviour
     {
         if (networkConnection.IsCreated)
             networkConnection.Disconnect(networkDriver);
-        networkConnection = default(NetworkConnection);
-        networkDriver.Dispose();
+
+        if (networkDriver.IsCreated)
+            networkDriver.Dispose();
     }
 
     void Update()
@@ -42,7 +47,11 @@ public class NetworkClient : MonoBehaviour
 
         if (!networkConnection.IsCreated)
         {
-            Debug.Log("Client is unable to connect to server");
+            if (isConnected)
+            {
+                Debug.LogError("Lost connection to server.");
+                isConnected = false;
+            }
             return;
         }
 
@@ -62,7 +71,9 @@ public class NetworkClient : MonoBehaviour
             {
                 case NetworkEvent.Type.Connect:
                     Debug.Log("Client connected to server.");
+                    isConnected = true; // Mark connection as established
                     break;
+
                 case NetworkEvent.Type.Data:
                     int sizeOfDataBuffer = streamReader.ReadInt();
                     NativeArray<byte> buffer = new NativeArray<byte>(sizeOfDataBuffer, Allocator.Persistent);
@@ -71,13 +82,16 @@ public class NetworkClient : MonoBehaviour
                     NetworkClientProcessing.ReceivedMessageFromServer(msg, pipelineUsed);
                     buffer.Dispose();
                     break;
+
                 case NetworkEvent.Type.Disconnect:
-                    Debug.Log("Client disconnected from server.");
+                    Debug.LogError("Disconnected from server.");
+                    isConnected = false; // Mark connection as lost
                     networkConnection = default(NetworkConnection);
                     break;
             }
         }
     }
+
 
     private bool PopNetworkEventAndCheckForData(out NetworkEvent.Type networkEventType, out DataStreamReader streamReader, out NetworkPipeline pipelineUsedToSendEvent)
     {
@@ -87,39 +101,89 @@ public class NetworkClient : MonoBehaviour
 
     public void SendMessageToServer(string msg, TransportPipeline pipeline)
     {
-        if (!networkConnection.IsCreated)
+        if (!isConnected)
         {
-            Debug.LogError("Connection is not created. Unable to send message.");
+            Debug.LogError("Failed to send message to server: Not connected.");
             return;
         }
 
-        NetworkPipeline networkPipeline = reliableAndInOrderPipeline;
-        if (pipeline == TransportPipeline.FireAndForget)
-            networkPipeline = nonReliableNotInOrderedPipeline;
+        if (!networkDriver.IsCreated)
+        {
+            Debug.LogError("Failed to send message to server: Network driver is not created.");
+            return;
+        }
 
-        byte[] msgAsByteArray = Encoding.Unicode.GetBytes(msg);
-        NativeArray<byte> buffer = new NativeArray<byte>(msgAsByteArray, Allocator.Persistent);
+        if (!networkConnection.IsCreated)
+        {
+            Debug.LogError("Failed to send message to server: Network connection is not created.");
+            return;
+        }
 
-        DataStreamWriter streamWriter;
-        networkDriver.BeginSend(networkPipeline, networkConnection, out streamWriter);
-        streamWriter.WriteInt(buffer.Length);
-        streamWriter.WriteBytes(buffer);
-        networkDriver.EndSend(streamWriter);
+        try
+        {
+            NetworkPipeline networkPipeline = reliableAndInOrderPipeline;
+            if (pipeline == TransportPipeline.FireAndForget)
+                networkPipeline = nonReliableNotInOrderedPipeline;
 
-        buffer.Dispose();
+            byte[] msgAsByteArray = Encoding.Unicode.GetBytes(msg);
+            NativeArray<byte> buffer = new NativeArray<byte>(msgAsByteArray, Allocator.Temp);
+
+            DataStreamWriter streamWriter;
+            if (networkDriver.BeginSend(networkPipeline, networkConnection, out streamWriter) == 0)
+            {
+                streamWriter.WriteInt(buffer.Length);
+                streamWriter.WriteBytes(buffer);
+                networkDriver.EndSend(streamWriter);
+                Debug.Log($"Message sent to server: {msg}");
+            }
+            else
+            {
+                Debug.LogError("Failed to send message to server: Unable to start send operation.");
+            }
+
+            buffer.Dispose();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Failed to send message to server: {ex.Message}");
+        }
     }
-
 
 
     public void Connect()
     {
-        networkDriver = NetworkDriver.Create();
-        reliableAndInOrderPipeline = networkDriver.CreatePipeline(typeof(FragmentationPipelineStage), typeof(ReliableSequencedPipelineStage));
-        nonReliableNotInOrderedPipeline = networkDriver.CreatePipeline(typeof(FragmentationPipelineStage));
-        networkConnection = default(NetworkConnection);
-        NetworkEndPoint endpoint = NetworkEndPoint.Parse(IPAddress, NetworkPort, NetworkFamily.Ipv4);
-        networkConnection = networkDriver.Connect(endpoint);
+        try
+        {
+            if (networkDriver.IsCreated)
+            {
+                Debug.LogWarning("Network driver already created. Skipping initialization.");
+                return;
+            }
+
+            networkDriver = NetworkDriver.Create();
+            reliableAndInOrderPipeline = networkDriver.CreatePipeline(typeof(FragmentationPipelineStage), typeof(ReliableSequencedPipelineStage));
+            nonReliableNotInOrderedPipeline = networkDriver.CreatePipeline(typeof(FragmentationPipelineStage));
+
+            networkConnection = default(NetworkConnection);
+
+            NetworkEndPoint endpoint = NetworkEndPoint.Parse(IPAddress, NetworkPort, NetworkFamily.Ipv4);
+            networkConnection = networkDriver.Connect(endpoint);
+
+            if (networkConnection.IsCreated)
+            {
+                Debug.Log("Client is attempting to connect to the server...");
+            }
+            else
+            {
+                Debug.LogError("Failed to initialize network connection.");
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Error during Connect: {ex.Message}");
+        }
     }
+
 
     public bool IsConnected()
     {

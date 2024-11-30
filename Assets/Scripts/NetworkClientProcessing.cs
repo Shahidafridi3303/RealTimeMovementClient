@@ -50,10 +50,8 @@ static public class NetworkClientProcessing
         }
     }
 
-
     private static void HandleSpawnAvatarMessage(string[] csv)
     {
-        // Parse data from the message
         int clientID = int.Parse(csv[1]);
         float xPercent = float.Parse(csv[2]);
         float yPercent = float.Parse(csv[3]);
@@ -61,33 +59,21 @@ static public class NetworkClientProcessing
         float g = float.Parse(csv[5]);
         float b = float.Parse(csv[6]);
 
-        // Convert color values
         Color avatarColor = new Color(r, g, b);
 
-        // Skip spawning for the local client ID
-        if (clientID == localClientID)
+        if (clientID == localClientID) return; // Skip spawning for local client
+
+        if (clientAvatars.ContainsKey(clientID))
         {
-            Debug.Log($"Skipping spawning avatar for local client ID: {clientID}");
+            Debug.LogWarning($"Avatar for Client {clientID} already exists. Ignoring spawn request.");
             return;
         }
 
-        // Check if the avatar for this client ID already exists
-        if (!clientAvatars.ContainsKey(clientID))
-        {
-            // Spawn the avatar and assign it a color
-            GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent), avatarColor);
+        GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent), avatarColor);
+        clientAvatars[clientID] = avatar;
 
-            // Add the newly spawned avatar to the dictionary
-            clientAvatars[clientID] = avatar;
-
-            Debug.Log($"Spawned avatar for Client {clientID} at ({xPercent}, {yPercent}) with color {avatarColor}");
-        }
-        else
-        {
-            Debug.LogWarning($"Avatar for Client {clientID} already exists. Ignoring spawn request.");
-        }
+        Debug.Log($"Spawned avatar for Client {clientID} at ({xPercent}, {yPercent}) with color {avatarColor}");
     }
-
 
 
     private static void HandleUpdatePositionMessage(string[] csv)
