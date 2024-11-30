@@ -12,16 +12,6 @@ static public class NetworkClientProcessing
     // Local client ID assigned by the server
     static int localClientID = -1;
 
-    public static Vector3 ConvertToWorldPosition(Vector2 percentPosition)
-    {
-        Camera mainCamera = Camera.main; // Assumes using the main camera
-        // Converts from percentage (0-1) to viewport space (still 0-1), then to world space
-        Vector3 worldPosition = mainCamera.ViewportToWorldPoint(new Vector3(percentPosition.x, percentPosition.y, 0));
-        worldPosition.z = 0; // Ensure the z-coordinate is set correctly for a 2D game
-        return worldPosition;
-    }
-
-
     public static void ReceivedMessageFromServer(string msg, TransportPipeline pipeline)
     {
         string[] csv = msg.Split(',');
@@ -39,13 +29,12 @@ static public class NetworkClientProcessing
         else if (signifier == ServerToClientSignifiers.UpdatePosition)
         {
             int clientID = int.Parse(csv[1]);
-            Vector2 newPosition = new Vector2(float.Parse(csv[2]), float.Parse(csv[3]));
+            float xPercent = float.Parse(csv[2]);
+            float yPercent = float.Parse(csv[3]);
 
-            // Ensure the client is updating the correct avatar position
             if (clientAvatars.ContainsKey(clientID))
             {
-                GameObject avatar = clientAvatars[clientID];
-                avatar.transform.position = ConvertToWorldPosition(newPosition);
+                gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
             }
         }
         else if (signifier == ServerToClientSignifiers.RemoveAvatar)
