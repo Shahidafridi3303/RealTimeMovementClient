@@ -6,12 +6,10 @@ public class GameLogic : MonoBehaviour
 
     Vector2 characterPositionInPercent; // Current position in percent (sent by the server)
     Vector2 characterVelocityInPercent; // Velocity based on input
-    const float CharacterSpeed = 0.25f; // Speed multiplier
-    float DiagonalCharacterSpeed;
+    [SerializeField] private float CharacterSpeed = 0.06f; // Editable speed in Inspector
 
     void Start()
     {
-        DiagonalCharacterSpeed = Mathf.Sqrt(CharacterSpeed * CharacterSpeed + CharacterSpeed * CharacterSpeed) / 2f;
         NetworkClientProcessing.SetGameLogic(this);
 
         Sprite circleTexture = Resources.Load<Sprite>("Circle");
@@ -27,40 +25,39 @@ public class GameLogic : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.D)
-            || Input.GetKeyUp(KeyCode.W) || Input.GetKeyUp(KeyCode.A) || Input.GetKeyUp(KeyCode.S) || Input.GetKeyUp(KeyCode.D))
+        // Reset velocity
+        characterVelocityInPercent = Vector2.zero;
+
+        // Check which keys are currently being held down
+        if (Input.GetKey(KeyCode.W))
         {
-            characterVelocityInPercent = Vector2.zero;
+            characterVelocityInPercent.y = 1;
+        }
+        if (Input.GetKey(KeyCode.S))
+        {
+            characterVelocityInPercent.y = -1;
+        }
+        if (Input.GetKey(KeyCode.D))
+        {
+            characterVelocityInPercent.x = 1;
+        }
+        if (Input.GetKey(KeyCode.A))
+        {
+            characterVelocityInPercent.x = -1;
+        }
 
-            if (Input.GetKey(KeyCode.W) && Input.GetKey(KeyCode.D))
-            {
-                characterVelocityInPercent.x = DiagonalCharacterSpeed;
-                characterVelocityInPercent.y = DiagonalCharacterSpeed;
-            }
-            else if (Input.GetKey(KeyCode.W) && Input.GetKey(KeyCode.A))
-            {
-                characterVelocityInPercent.x = -DiagonalCharacterSpeed;
-                characterVelocityInPercent.y = DiagonalCharacterSpeed;
-            }
-            else if (Input.GetKey(KeyCode.S) && Input.GetKey(KeyCode.D))
-            {
-                characterVelocityInPercent.x = DiagonalCharacterSpeed;
-                characterVelocityInPercent.y = -DiagonalCharacterSpeed;
-            }
-            else if (Input.GetKey(KeyCode.S) && Input.GetKey(KeyCode.A))
-            {
-                characterVelocityInPercent.x = -DiagonalCharacterSpeed;
-                characterVelocityInPercent.y = -DiagonalCharacterSpeed;
-            }
-            else if (Input.GetKey(KeyCode.D))
-                characterVelocityInPercent.x = CharacterSpeed;
-            else if (Input.GetKey(KeyCode.A))
-                characterVelocityInPercent.x = -CharacterSpeed;
-            else if (Input.GetKey(KeyCode.W))
-                characterVelocityInPercent.y = CharacterSpeed;
-            else if (Input.GetKey(KeyCode.S))
-                characterVelocityInPercent.y = -CharacterSpeed;
+        // Normalize diagonal movement to maintain consistent speed
+        if (characterVelocityInPercent.magnitude > 1)
+        {
+            characterVelocityInPercent.Normalize();
+        }
 
+        // Apply speed multiplier
+        characterVelocityInPercent *= CharacterSpeed;
+
+        // Send velocity to server if it's non-zero
+        if (characterVelocityInPercent != Vector2.zero)
+        {
             Debug.Log($"Client: Calculated Velocity: {characterVelocityInPercent}");
 
             string msg = $"{ClientToServerSignifiers.UpdatePosition},{characterVelocityInPercent.x},{characterVelocityInPercent.y}";
@@ -68,8 +65,6 @@ public class GameLogic : MonoBehaviour
             NetworkClientProcessing.SendMessageToServer(msg, TransportPipeline.ReliableAndInOrder);
         }
     }
-
-
 
     public GameObject SpawnAvatar(Vector2 positionInPercent)
     {
@@ -82,18 +77,19 @@ public class GameLogic : MonoBehaviour
         return avatar;
     }
 
-    // Client's GameLogic
     public void UpdateAvatarPosition(GameObject avatar, Vector2 positionInPercent)
     {
+        // Convert percent position to world position
         Vector2 screenPos = new Vector2(positionInPercent.x * Screen.width, positionInPercent.y * Screen.height);
         Vector3 worldPos = Camera.main.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 0));
         worldPos.z = 0;
 
+        // Debug the conversion
         Debug.Log($"Converting percent position ({positionInPercent.x}, {positionInPercent.y}) to world position ({worldPos.x}, {worldPos.y}, {worldPos.z})");
 
+        // Apply the world position to the avatar
         avatar.transform.position = worldPos;
+
         Debug.Log($"Updated avatar position to: {avatar.transform.position}");
     }
-
-
 }
