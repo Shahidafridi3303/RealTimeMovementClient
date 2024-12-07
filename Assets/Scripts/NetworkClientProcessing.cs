@@ -1,18 +1,13 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
 static public class NetworkClientProcessing
 {
     static NetworkClient networkClient;
     static GameLogic gameLogic;
-
-    // Dictionary to track avatars of other clients
     static Dictionary<int, GameObject> clientAvatars = new Dictionary<int, GameObject>();
-
-    // Local client ID assigned by the server
     static int localClientID = -1;
-
-    #region Message Handling
+    public static int GetLocalClientID() => localClientID;
 
     public static void ReceivedMessageFromServer(string msg, TransportPipeline pipeline)
     {
@@ -22,8 +17,7 @@ static public class NetworkClientProcessing
         switch (signifier)
         {
             case ServerToClientSignifiers.AssignClientID:
-                int assignedID = int.Parse(csv[1]);
-                SetLocalClientID(assignedID);
+                SetLocalClientID(int.Parse(csv[1]));
                 break;
 
             case ServerToClientSignifiers.SpawnAvatar:
@@ -40,7 +34,11 @@ static public class NetworkClientProcessing
         }
     }
 
-    // Handle the avatar spawning
+    public static GameObject GetAvatarByID(int clientID)
+    {
+        return clientAvatars.ContainsKey(clientID) ? clientAvatars[clientID] : null;
+    }
+
     private static void HandleSpawnAvatarMessage(string[] csv)
     {
         int clientID = int.Parse(csv[1]);
@@ -52,10 +50,8 @@ static public class NetworkClientProcessing
 
         GameObject avatar = gameLogic.SpawnAvatar(new Vector2(xPercent, yPercent), avatarColor);
         clientAvatars[clientID] = avatar;
-        Debug.Log($"Spawned avatar for Client {clientID} at ({xPercent}, {yPercent}) with color {avatarColor}");
     }
 
-    // Update the position of the avatar
     private static void HandleUpdatePositionMessage(string[] csv)
     {
         int clientID = int.Parse(csv[1]);
@@ -64,15 +60,15 @@ static public class NetworkClientProcessing
 
         if (clientAvatars.ContainsKey(clientID))
         {
-            gameLogic.UpdateAvatarPosition(clientAvatars[clientID], new Vector2(xPercent, yPercent));
+            Vector2 newPosition = new Vector2(xPercent, yPercent);
+            gameLogic.UpdateAvatarPosition(clientAvatars[clientID], newPosition);
         }
     }
 
-    // Remove the avatar when a client disconnects
+
     private static void HandleRemoveAvatarMessage(string[] csv)
     {
         int clientID = int.Parse(csv[1]);
-
         if (clientAvatars.ContainsKey(clientID))
         {
             GameObject avatar = clientAvatars[clientID];
@@ -81,58 +77,26 @@ static public class NetworkClientProcessing
         }
     }
 
-    #endregion
-
-    #region Sending Messages
-
-    // Send a message to the server
     public static void SendMessageToServer(string msg, TransportPipeline pipeline)
     {
         networkClient.SendMessageToServer(msg, pipeline);
     }
 
-    #endregion
-
-    #region Setup Methods
-
-    // Set the network client
-    public static void SetNetworkedClient(NetworkClient client)
-    {
-        networkClient = client;
-    }
-
-    // Get the network client
-    public static NetworkClient GetNetworkedClient()
-    {
-        return networkClient;
-    }
-
-    // Set the game logic
-    public static void SetGameLogic(GameLogic logic)
-    {
-        gameLogic = logic;
-    }
-
-    // Set the local client ID
-    private static void SetLocalClientID(int id)
-    {
-        localClientID = id;
-    }
-
-    #endregion
+    public static void SetNetworkedClient(NetworkClient client) => networkClient = client;
+    public static NetworkClient GetNetworkedClient() => networkClient; // Add this method
+    public static void SetGameLogic(GameLogic logic) => gameLogic = logic;
+    private static void SetLocalClientID(int id) => localClientID = id;
 }
 
-#region Protocol Signifiers
 static public class ClientToServerSignifiers
 {
-    public const int UpdatePosition = 1; // Sent when a client updates their velocity
+    public const int UpdatePosition = 1;
 }
 
 static public class ServerToClientSignifiers
 {
-    public const int AssignClientID = 0; // Sent to assign the client's ID
-    public const int SpawnAvatar = 1;    // Sent to spawn an avatar
-    public const int UpdatePosition = 2; // Sent to update a client's position
-    public const int RemoveAvatar = 3;   // Sent to remove a disconnected client's avatar
+    public const int AssignClientID = 0;
+    public const int SpawnAvatar = 1;
+    public const int UpdatePosition = 2;
+    public const int RemoveAvatar = 3;
 }
-#endregion
